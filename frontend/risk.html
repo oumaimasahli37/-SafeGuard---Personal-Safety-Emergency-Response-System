@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SafeGuard — Risk Calculator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{font-family:system-ui,Segoe UI,Roboto,Arial;}
+
+    body{margin:0;background:#f6f8fa;color:#111}
+
+    /* NAVBAR (same look as hotspots) */
+    .app-header{
+      display:flex;
+      align-items:center;
+      gap:16px;
+      padding:10px 14px;
+      background: linear-gradient(90deg,#071029,#0b1220);
+      color:#fff;
+      box-shadow:0 2px 8px rgba(2,6,23,0.6);
+    }
+    .app-header .brand{display:flex;align-items:center;gap:10px;cursor:pointer}
+    .app-header .brand img{width:28px;height:28px;border-radius:4px}
+    .app-header .brand .title{font-weight:700;font-size:1.05rem}
+    .navlinks{display:flex;gap:8px;align-items:center}
+    .navlinks a{
+      color:#dbeafe;text-decoration:none;padding:8px 10px;border-radius:6px;font-weight:600;
+    }
+    .navlinks a:hover{background:rgba(255,255,255,0.04)}
+    .navlinks a.active{background:#0b79ff;color:#fff;box-shadow:0 6px 18px rgba(11,121,255,0.12)}
+    .right-controls{margin-left:auto}
+    .nav-btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#fff;padding:8px 10px;border-radius:6px;cursor:pointer}
+    @media (max-width:820px){ .navlinks{display:none} }
+
+    /* PAGE STYLES */
+    header.page-header{background:transparent;padding:18px 14px}
+    main{max-width:920px;margin:18px auto;padding:12px}
+    .card{background:#fff;padding:18px;border-radius:10px;box-shadow:0 8px 30px rgba(15,23,42,0.06)}
+    label{display:block;font-weight:700;margin-top:10px}
+    input[type="number"]{width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;margin-top:6px}
+    .row{display:flex;gap:12px;margin-top:12px}
+    .btn{padding:10px 14px;border-radius:8px;border:0;background:#0b79ff;color:#fff;font-weight:700;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid #0b79ff;color:#0b79ff}
+    .result{margin-top:16px;padding:12px;border-radius:8px;background:#0f1724;color:#e6eef6;white-space:pre-wrap}
+    .hint{font-size:0.9rem;color:#555;margin-top:8px}
+    #status{margin-top:10px;font-style:italic;color:#555}
+    pre.output-json{background:#071029;color:#dbeafe;padding:12px;border-radius:8px;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="app-header">
+    <div class="brand" id="brand">
+      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24'><path fill='%23ffffff' d='M12 2L2 7l10 5 10-5-10-5zm0 12l-10-5v8l10 5 10-5v-8l-10 5z'/></svg>">
+      <span class="title">SafeGuard</span>
+    </div>
+
+    <nav class="navlinks">
+      <a href="index.html" data-nav="index">Dashboard</a>
+      <a href="hotspots.html" data-nav="hotspots">Hotspots</a>
+      <a href="risk.html" data-nav="risk">Risk</a>
+      <a href="contacts.html" data-nav="contacts">Contacts</a>
+      <a href="medical.html" data-nav="medical">Medical</a>
+      <a href="sos.html" data-nav="sos">SOS</a>
+    </nav>
+
+    <div class="right-controls">
+      <button id="open-map" class="nav-btn">Map</button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main>
+    <div class="card">
+      <h2 style="margin:0 0 8px 0">Risk Calculator</h2>
+      <p class="hint">Enter coordinates (latitude, longitude) to calculate a risk score (0–100) for that location. Use <strong>Use my current location</strong> to auto-fill coordinates.</p>
+
+      <label for="lat">Latitude</label>
+      <input id="lat" type="number" step="any" placeholder="e.g. 40.7128" />
+
+      <label for="lon">Longitude</label>
+      <input id="lon" type="number" step="any" placeholder="e.g. -74.0060" />
+
+      <div class="row">
+        <button id="use-my-loc" class="btn ghost">Use my current location</button>
+        <button id="calc" class="btn">Calculate Risk</button>
+      </div>
+
+      <div id="status">Status: idle</div>
+
+      <div id="output" class="result" style="display:none">
+        <pre class="output-json" id="output-json"></pre>
+      </div>
+    </div>
+  </main>
+
+  <!-- PAGE SCRIPTS -->
+  <script>
+    const API_BASE = 'http://127.0.0.1:5000';
+
+    /* Navbar helper — highlight active link & map button */
+    (function(){
+      const path = location.pathname.split('/').pop() || 'risk.html';
+      const mapping = {
+        'index.html':'index','':'index','hotspots.html':'hotspots','risk.html':'risk',
+        'contacts.html':'contacts','medical.html':'medical','sos.html':'sos'
+      };
+      const navKey = mapping[path.toLowerCase()] || 'risk';
+      document.querySelectorAll('.navlinks a').forEach(a=>{
+        try{ if(a.getAttribute('data-nav') === navKey) a.classList.add('active'); }catch(e){}
+      });
+      const mapBtn = document.getElementById('open-map');
+      if(mapBtn) mapBtn.addEventListener('click', ()=> location.href='hotspots.html');
+      const brand = document.getElementById('brand');
+      if(brand) brand.addEventListener('click', ()=> { const nav = document.querySelector('.navlinks'); if(nav) nav.style.display = (getComputedStyle(nav).display === 'none') ? 'flex' : 'none'; });
+    })();
+
+    const latEl = document.getElementById('lat');
+    const lonEl = document.getElementById('lon');
+    const statusEl = document.getElementById('status');
+    const outWrap = document.getElementById('output');
+    const outJson = document.getElementById('output-json');
+    const btnCalc = document.getElementById('calc');
+    const btnMyLoc = document.getElementById('use-my-loc');
+
+    function setStatus(s){ statusEl.textContent = 'Status: ' + s; }
+    function showOutput(obj){
+      outWrap.style.display = 'block';
+      outJson.textContent = JSON.stringify(obj, null, 2);
+    }
+
+    /* Calculate risk */
+    btnCalc.addEventListener('click', async () => {
+      outWrap.style.display = 'none';
+      const lat = parseFloat(latEl.value);
+      const lon = parseFloat(lonEl.value);
+      if(Number.isNaN(lat) || Number.isNaN(lon)){
+        setStatus('Please enter valid numeric latitude and longitude.');
+        return;
+      }
+
+      setStatus('Requesting risk score…');
+      try {
+        const res = await fetch(`${API_BASE}/api/analytics/risk-score`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({latitude: lat, longitude: lon})
+        });
+        if(!res.ok){
+          const text = await res.text();
+          setStatus('Server error');
+          outWrap.style.display = 'block';
+          outJson.textContent = text;
+          return;
+        }
+        const data = await res.json();
+        setStatus('Response received');
+        showOutput({
+          latitude: lat,
+          longitude: lon,
+          risk_score: data.risk_score,
+          interpretation: data.interpretation,
+          nearby_incidents: data.nearby_incidents,
+          recent_incidents: data.recent_incidents
+        });
+      } catch(err){
+        setStatus('Network error: ' + err.message);
+        outWrap.style.display = 'block';
+        outJson.textContent = err.message;
+      }
+    });
+
+    /* Use browser geolocation */
+    btnMyLoc.addEventListener('click', () => {
+      setStatus('Getting current position…');
+      if(!navigator.geolocation){
+        setStatus('Geolocation not supported by your browser.');
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(pos => {
+        latEl.value = pos.coords.latitude.toFixed(6);
+        lonEl.value = pos.coords.longitude.toFixed(6);
+        setStatus('Location filled. Click "Calculate Risk".');
+      }, err => {
+        setStatus('Location error: ' + err.message);
+      }, {enableHighAccuracy:true, timeout:10000});
+    });
+  </script>
+
+</body>
+</html>

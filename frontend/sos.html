@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SafeGuard — SOS Emergency</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <style>
+    :root{font-family:system-ui,Segoe UI,Roboto,Arial;}
+
+    body{margin:0;background:#0f172a;color:#fff}
+
+    /* NAVBAR (same across app) */
+    .app-header{
+      display:flex;align-items:center;gap:16px;padding:10px 14px;
+      background:linear-gradient(90deg,#071029,#0b1220);color:#fff;
+      box-shadow:0 2px 8px rgba(2,6,23,0.6);
+    }
+    .app-header .brand{display:flex;align-items:center;gap:10px;cursor:pointer;}
+    .app-header .brand img{width:28px;height:28px;border-radius:4px}
+    .app-header .brand .title{font-weight:700;font-size:1.05rem}
+    .navlinks{display:flex;gap:8px;align-items:center}
+    .navlinks a{
+      color:#dbeafe;text-decoration:none;padding:8px 10px;border-radius:6px;font-weight:600
+    }
+    .navlinks a:hover{background:rgba(255,255,255,0.04)}
+    .navlinks a.active{
+      background:#0b79ff;color:#fff;
+      box-shadow:0 6px 18px rgba(11,121,255,0.12)
+    }
+    .right-controls{margin-left:auto}
+    .nav-btn{
+      background:transparent;border:1px solid rgba(255,255,255,0.06);
+      color:#fff;padding:8px 10px;border-radius:6px;cursor:pointer
+    }
+    @media(max-width:820px){ .navlinks{display:none} }
+
+    /* PAGE STYLING */
+    main{max-width:900px;margin:0 auto;padding:20px;text-align:center}
+
+    .sos-container{
+      margin-top:40px;
+      padding:30px;
+      background:#111827;
+      border-radius:14px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.4);
+    }
+
+    .sos-btn{
+      width:180px;height:180px;
+      border-radius:50%;
+      background:radial-gradient(circle,#dc2626,#b91c1c);
+      border:none;
+      color:#fff;font-size:36px;font-weight:800;
+      cursor:pointer;
+      box-shadow:0 0 40px rgba(255,0,0,0.4);
+      transition:0.2s;
+    }
+    .sos-btn:active{
+      transform:scale(0.95);
+      box-shadow:0 0 25px rgba(255,0,0,0.3);
+    }
+
+    .countdown{
+      font-size:32px;
+      font-weight:700;
+      color:#facc15;
+      margin-top:20px;
+      display:none;
+    }
+
+    #status{
+      margin-top:20px;
+      font-style:italic;
+      color:#fff;
+      padding:10px;
+    }
+
+    .result-box{
+      margin-top:20px;
+      background:#1e293b;
+      padding:20px;
+      border-radius:12px;
+      text-align:left;
+      white-space:pre-wrap;
+      color:#e2e8f0;
+      display:none;
+    }
+
+    a.map-link{
+      color:#38bdf8;
+      font-weight:700;
+    }
+
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<header class="app-header">
+  <div class="brand" id="brand">
+    <img src="data:image/svg+xml;utf8,
+      <svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'
+      viewBox='0 0 24 24'><path fill='%23ffffff'
+      d='M12 2L2 7l10 5 10-5-10-5zm0 12l-10-5v8l10 5 10-5v-8l-10 5z'/></svg>">
+    <span class="title">SafeGuard</span>
+  </div>
+
+  <nav class="navlinks">
+    <a href="index.html" data-nav="index">Dashboard</a>
+    <a href="hotspots.html" data-nav="hotspots">Hotspots</a>
+    <a href="risk.html" data-nav="risk">Risk</a>
+    <a href="contacts.html" data-nav="contacts">Contacts</a>
+    <a href="medical.html" data-nav="medical">Medical</a>
+    <a href="sos.html" data-nav="sos">SOS</a>
+  </nav>
+
+  <div class="right-controls">
+    <button id="open-map" class="nav-btn">Map</button>
+  </div>
+</header>
+
+<main>
+  <h1 style="margin-top:20px;font-size:30px;font-weight:700">Emergency SOS</h1>
+  <p style="color:#cbd5e1;margin-top:-6px">
+    Press the button below to send an SOS alert with your real-time location.
+  </p>
+
+  <div class="sos-container">
+    <button class="sos-btn" id="sos-btn">SOS</button>
+    <div class="countdown" id="countdown">3</div>
+    <div id="status">Status: idle</div>
+  </div>
+
+  <div class="result-box" id="result-box">
+    <h3 style="margin-top:0">SOS Sent Successfully ✔</h3>
+    <div id="result-text"></div>
+  </div>
+</main>
+
+<script>
+  const API_BASE = "http://127.0.0.1:5000";
+
+  /* NAVBAR SCRIPT */
+  (function(){
+    const path = location.pathname.split('/').pop() || 'sos.html';
+    const map = {
+      "index.html":"index","":"index",
+      "hotspots.html":"hotspots","risk.html":"risk",
+      "contacts.html":"contacts","medical.html":"medical","sos.html":"sos"
+    };
+    const active = map[path.toLowerCase()] || "sos";
+    document.querySelectorAll('.navlinks a').forEach(a=>{
+      if(a.dataset.nav === active) a.classList.add('active');
+    });
+    document.getElementById('open-map').onclick =
+      ()=> location.href="hotspots.html";
+    document.getElementById('brand').onclick = ()=>{
+      const nav = document.querySelector('.navlinks');
+      nav.style.display = (getComputedStyle(nav).display==="none")
+        ? "flex" : "none";
+    };
+  })();
+
+  const sosBtn = document.getElementById("sos-btn");
+  const countdownEl = document.getElementById("countdown");
+  const statusEl = msg => document.getElementById("status").textContent = "Status: " + msg;
+  const resultBox = document.getElementById("result-box");
+  const resultText = document.getElementById("result-text");
+
+  /* ===========================
+        SOS BUTTON LOGIC
+     =========================== */
+  sosBtn.addEventListener("click", ()=>{
+    let counter = 3;
+    countdownEl.style.display = "block";
+    countdownEl.textContent = counter;
+    statusEl("Counting down…");
+
+    const timer = setInterval(()=>{
+      counter--;
+      countdownEl.textContent = counter;
+      if(counter === 0){
+        clearInterval(timer);
+        countdownEl.style.display = "none";
+        triggerSOS();
+      }
+    }, 1000);
+  });
+
+  /* ===========================
+        SEND SOS TO BACKEND
+     =========================== */
+  function triggerSOS(){
+    statusEl("Getting location…");
+
+    if(!navigator.geolocation){
+      statusEl("Geolocation not supported");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      statusEl("Sending SOS...");
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/sos`, {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({
+            latitude: lat,
+            longitude: lon,
+            address: "Auto-captured via GPS"
+          })
+        });
+
+        const data = await res.json();
+        if(!res.ok){
+          statusEl("Server error");
+          resultBox.style.display = "block";
+          resultText.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        statusEl("SOS Sent");
+        resultBox.style.display = "block";
+        resultText.innerHTML = `
+          <strong>Contacts Notified:</strong> ${data.contacts_notified}<br><br>
+          <strong>Location:</strong><br>
+          Latitude: ${lat}<br>
+          Longitude: ${lon}<br><br>
+          <a class="map-link" href="${data.location.maps_url}" target="_blank">
+            View Location on Google Maps
+          </a><br><br>
+          <strong>Medical Shared:</strong><br>
+          Blood Group: ${data.medical_shared.blood_group}<br>
+          Allergies: ${data.medical_shared.allergies}
+        `;
+
+      } catch(err){
+        statusEl("Network error");
+        resultBox.style.display="block";
+        resultText.textContent = err.message;
+      }
+
+    }, err=>{
+      statusEl("Location error: " + err.message);
+    }, {enableHighAccuracy:true, timeout:30000, maximumAge:0});
+  }
+</script>
+
+</body>
+</html>

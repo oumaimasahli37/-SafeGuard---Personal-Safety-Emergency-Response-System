@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SafeGuard — Hotspot Map</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"/>
+
+  <style>
+    :root{font-family:system-ui,Segoe UI,Roboto,Arial;}
+
+    body{
+      margin:0;
+      background:#0f172a;
+      color:#fff;
+    }
+
+    /* ================= NAVBAR =================== */
+    .app-header{
+      display:flex;
+      align-items:center;
+      gap:16px;
+      padding:10px 14px;
+      background: linear-gradient(90deg,#071029,#0b1220);
+      color:#fff;
+      box-shadow:0 2px 8px rgba(2,6,23,0.6);
+      position:sticky;
+      top:0;
+      z-index:9999;
+    }
+    .app-header .brand{
+      display:flex;align-items:center;gap:10px;cursor:pointer;
+    }
+    .app-header .brand img{width:28px;height:28px;border-radius:4px}
+    .app-header .brand .title{font-weight:700;font-size:1.05rem}
+
+    .navlinks{display:flex;gap:8px;align-items:center}
+    .navlinks a{
+      color:#dbeafe;
+      text-decoration:none;
+      padding:8px 10px;
+      border-radius:6px;
+      font-weight:600;
+    }
+    .navlinks a:hover{background:rgba(255,255,255,0.04)}
+    .navlinks a.active{
+      background:#0b79ff;
+      color:#fff;
+      box-shadow:0 6px 18px rgba(11,121,255,0.12)
+    }
+
+    .right-controls{margin-left:auto}
+    .nav-btn{
+      background:transparent;
+      border:1px solid rgba(255,255,255,0.06);
+      color:#fff;
+      padding:8px 10px;
+      border-radius:6px;
+      cursor:pointer;
+    }
+    @media(max-width:820px){
+      .navlinks{display:none}
+    }
+
+    /* ================= MAIN =================== */
+    #status{
+      padding:10px;
+      text-align:center;
+      background:#fef3c7;
+      color:#7c2d12;
+      font-weight:600;
+      font-family:system-ui;
+    }
+
+    #map{
+      height:calc(100vh - 110px);
+      width:100%;
+    }
+
+    /* Heatmap toggle button style */
+    .toggle-active{
+      background:#ff6b6b !important;
+      color:#111 !important;
+      font-weight:700 !important;
+    }
+
+    /* Legend */
+    .hotspot-legend{
+      box-shadow:0 4px 12px rgba(0,0,0,0.4);
+      line-height:1.4;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <!-- =================== NAVBAR =================== -->
+  <header class="app-header">
+    <div class="brand">
+      <img src="data:image/svg+xml;utf8,
+      <svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24'>
+        <path fill='%23ffffff' d='M12 2L2 7l10 5 10-5-10-5zm0 12l-10-5v8l10 5 10-5v-8l-10 5z'/>
+      </svg>" />
+      <span class="title">SafeGuard</span>
+    </div>
+
+    <nav class="navlinks">
+      <a href="index.html" data-nav="index">Dashboard</a>
+      <a href="hotspots.html" data-nav="hotspots">Hotspots</a>
+      <a href="risk.html" data-nav="risk">Risk</a>
+      <a href="contacts.html" data-nav="contacts">Contacts</a>
+      <a href="medical.html" data-nav="medical">Medical</a>
+      <a href="sos.html" data-nav="sos">SOS</a>
+    </nav>
+
+    <div class="right-controls">
+      <button id="open-map" class="nav-btn">Map</button>
+    </div>
+  </header>
+
+  <div id="status">Loading hotspot data…</div>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <!-- Heatmap plugin -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:5000";
+    const map = L.map("map").setView([40.7589, -73.9851], 13);
+    const statusBox = document.getElementById("status");
+
+    /* ================= Base Layers ================= */
+    const esriSat = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom:19 }
+    ).addTo(map);
+
+    const esriPlaces = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom:19 }
+    );
+
+    const esriTrans = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom:19 }
+    );
+
+    const hybridLabels = L.layerGroup([esriPlaces, esriTrans]);
+    hybridLabels.addTo(map);
+
+    /* Hotspot layers */
+    const hotspotsLayer = L.layerGroup().addTo(map);
+    let heatLayer = null;
+    let heatOn = false;
+    let lastHotspots = [];
+
+    /* ================== Load hotspots ================== */
+    async function loadHotspots(){
+      try{
+        statusBox.textContent = "Fetching hotspots…";
+        let res = await fetch(`${API_BASE}/api/analytics/hotspots`);
+        let data = await res.json();
+
+        if(!data.hotspots || data.hotspots.length === 0){
+          statusBox.textContent = "No hotspots available.";
+          return;
+        }
+
+        hotspotsLayer.clearLayers();
+        lastHotspots = data.hotspots;
+        statusBox.textContent = `Loaded ${data.hotspots.length} hotspot(s)`;
+
+        let heatData = [];
+
+        data.hotspots.forEach(h=>{
+          const lat = h.latitude;
+          const lon = h.longitude;
+          const count = h.incident_count;
+          const severity = h.average_severity || 3;
+
+          const circle = L.circle([lat, lon], {
+            radius: Math.max(200, count * 40),
+            fillColor:"#ff6b6b",
+            fillOpacity:0.45,
+            color:"#ff3b3b",
+            weight:2
+          })
+          .addTo(hotspotsLayer)
+          .bindPopup(`
+            <b>Cluster #${h.cluster_id}</b><br>
+            <b>Incidents:</b> ${count}<br>
+            <b>Avg Severity:</b> ${severity}<br>
+            <b>Common Type:</b> ${h.most_common_type}
+          `);
+
+          heatData.push([lat, lon, Math.min(1, (count*severity)/25)]);
+        });
+
+        if(!heatLayer){
+          heatLayer = L.heatLayer(heatData, { radius:25, blur:15, maxZoom:17 });
+        } else {
+          heatLayer.setLatLngs(heatData);
+        }
+
+      }catch(err){
+        statusBox.textContent = "Error loading hotspots.";
+      }
+    }
+    loadHotspots();
+
+    /* ================= Navbar JS ================= */
+    (function(){
+      const path = location.pathname.split("/").pop() || "hotspots.html";
+      const current = path.toLowerCase();
+      const mapBtn = document.getElementById("open-map");
+
+      const mapping = {
+        "index.html":"index",
+        "":"index",
+        "hotspots.html":"hotspots",
+        "risk.html":"risk",
+        "contacts.html":"contacts",
+        "medical.html":"medical",
+        "sos.html":"sos"
+      };
+
+      const active = mapping[current] || "hotspots";
+
+      // highlight
+      document.querySelectorAll(".navlinks a").forEach(a=>{
+        if(a.dataset.nav === active) a.classList.add("active");
+      });
+
+      mapBtn.addEventListener("click", ()=> location.href="hotspots.html");
+    })();
+  </script>
+
+</body>
+</html>
