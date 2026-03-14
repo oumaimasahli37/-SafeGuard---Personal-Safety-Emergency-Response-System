@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SafeGuard — Emergency Contacts</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <style>
+    :root{font-family:system-ui,Segoe UI,Roboto,Arial;}
+
+    body{margin:0;background:#f6f8fa;color:#111}
+
+    /* NAVBAR */
+    .app-header{
+      display:flex;align-items:center;gap:16px;padding:10px 14px;
+      background:linear-gradient(90deg,#071029,#0b1220);color:#fff;
+      box-shadow:0 2px 8px rgba(2,6,23,0.6);
+    }
+    .app-header .brand{display:flex;align-items:center;gap:10px;cursor:pointer;}
+    .app-header .brand img{width:28px;height:28px;border-radius:4px}
+    .app-header .brand .title{font-weight:700;font-size:1.05rem}
+    .navlinks{display:flex;gap:8px;align-items:center}
+    .navlinks a{color:#dbeafe;text-decoration:none;padding:8px 10px;
+      border-radius:6px;font-weight:600}
+    .navlinks a:hover{background:rgba(255,255,255,0.04)}
+    .navlinks a.active{background:#0b79ff;color:#fff;
+      box-shadow:0 6px 18px rgba(11,121,255,0.12)}
+    .right-controls{margin-left:auto}
+    .nav-btn{background:transparent;border:1px solid rgba(255,255,255,0.06);
+      color:#fff;padding:8px 10px;border-radius:6px;cursor:pointer}
+    @media(max-width:820px){ .navlinks{display:none} }
+
+    /* PAGE STYLING */
+    main{max-width:900px;margin:20px auto;padding:12px}
+    .card{
+      background:#fff;padding:20px;border-radius:10px;
+      box-shadow:0 8px 30px rgba(15,23,42,0.06);margin-bottom:20px;
+    }
+    label{font-weight:700;margin-top:10px;display:block}
+    input,select{
+      width:100%;padding:10px;margin-top:6px;border-radius:8px;
+      border:1px solid #ddd;
+    }
+    .btn{
+      padding:10px 14px;border-radius:8px;border:0;background:#0b79ff;
+      color:#fff;font-weight:700;cursor:pointer;margin-top:14px;
+    }
+    .btn.delete{
+      background:#e11d48;
+      margin:0;padding:6px 10px;font-size:0.82rem;border-radius:6px;
+    }
+    .contact-box{
+      padding:12px;border:1px solid #ddd;border-radius:10px;
+      margin-top:10px;background:#fafafa;
+      display:flex;justify-content:space-between;align-items:center;
+    }
+    .contact-info{font-size:0.95rem}
+    #status{margin-top:12px;color:#555;font-style:italic}
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="app-header">
+    <div class="brand" id="brand">
+      <img src="data:image/svg+xml;utf8,
+      <svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'
+      viewBox='0 0 24 24'><path fill='%23ffffff'
+      d='M12 2L2 7l10 5 10-5-10-5zm0 12l-10-5v8l10 5
+      10-5v-8l-10 5z'/></svg>">
+      <span class="title">SafeGuard</span>
+    </div>
+
+    <nav class="navlinks">
+      <a href="index.html" data-nav="index">Dashboard</a>
+      <a href="hotspots.html" data-nav="hotspots">Hotspots</a>
+      <a href="risk.html" data-nav="risk">Risk</a>
+      <a href="contacts.html" data-nav="contacts">Contacts</a>
+      <a href="medical.html" data-nav="medical">Medical</a>
+      <a href="sos.html" data-nav="sos">SOS</a>
+    </nav>
+
+    <div class="right-controls">
+      <button id="open-map" class="nav-btn">Map</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>Add Emergency Contact</h2>
+      <p style="color:#555;margin-top:-4px">
+        You may add <strong>up to 10 contacts</strong>. All contacts are notified during SOS.
+      </p>
+
+      <label>Name</label>
+      <input id="cname" placeholder="e.g. Sarah Johnson"/>
+
+      <label>Phone</label>
+      <input id="cphone" placeholder="+1234567890"/>
+
+      <label>Email (optional)</label>
+      <input id="cemail" placeholder="example@gmail.com"/>
+
+      <label>Relation</label>
+      <select id="crelation">
+        <option>Mother</option><option>Father</option>
+        <option>Friend</option><option>Sibling</option>
+        <option>Colleague</option><option>Other</option>
+      </select>
+
+      <button class="btn" id="add-btn">Add Contact</button>
+      <div id="status">Status: idle</div>
+    </div>
+
+    <!-- Contact List -->
+    <div class="card">
+      <h2>Your Emergency Contacts</h2>
+      <div id="list"></div>
+    </div>
+  </main>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:5000";
+
+    /* NAVBAR SCRIPT */
+    (function(){
+      const page = location.pathname.split('/').pop() || 'contacts.html';
+      const map = {
+        "index.html":"index","":"index",
+        "hotspots.html":"hotspots","risk.html":"risk",
+        "contacts.html":"contacts","medical.html":"medical","sos.html":"sos"
+      };
+      const active = map[page.toLowerCase()] || "contacts";
+      document.querySelectorAll('.navlinks a').forEach(a=>{
+        if(a.dataset.nav === active) a.classList.add('active');
+      });
+      document.getElementById('open-map').onclick =
+        ()=> location.href="hotspots.html";
+      document.getElementById('brand').onclick = ()=>{
+        const nav = document.querySelector('.navlinks');
+        nav.style.display = (getComputedStyle(nav).display==="none") ? "flex":"none";
+      };
+    })();
+
+    const listBox = document.getElementById("list");
+    const status = msg => document.getElementById("status").textContent = "Status: " + msg;
+
+    /* Load contacts */
+    async function loadContacts(){
+      listBox.innerHTML = "Loading...";
+      let res = await fetch(API_BASE + "/api/contacts");
+      let data = await res.json();
+
+      if(!Array.isArray(data) || data.length === 0){
+        listBox.innerHTML = "<p style='color:#555'>No contacts added yet.</p>";
+        return;
+      }
+
+      listBox.innerHTML = "";
+      data.forEach(c=>{
+        const box = document.createElement("div");
+        box.className = "contact-box";
+        box.innerHTML = `
+          <div class="contact-info">
+            <b>${c.name}</b><br>
+            ${c.phone} — ${c.relation}<br>
+            <small>${c.email || ""}</small>
+          </div>
+          <button class="btn delete" onclick="delContact(${c.id})">Delete</button>
+        `;
+        listBox.appendChild(box);
+      });
+    }
+
+    /* Add contact */
+    document.getElementById("add-btn").onclick = async ()=>{
+      const name = document.getElementById("cname").value.trim();
+      const phone = document.getElementById("cphone").value.trim();
+      const email = document.getElementById("cemail").value.trim();
+      const relation = document.getElementById("crelation").value;
+
+      if(!name || !phone){
+        status("Name & phone required");
+        return;
+      }
+
+      status("Adding...");
+      let res = await fetch(API_BASE + "/api/contacts", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({name,phone,email,relation})
+      });
+
+      if(res.ok){
+        status("Added!");
+        loadContacts();
+      } else {
+        let t = await res.text();
+        status("Error: " + t);
+      }
+    };
+
+    /* Delete */
+    async function delContact(id){
+      if(!confirm("Delete contact?")) return;
+      status("Deleting...");
+      let res = await fetch(API_BASE+"/api/contacts/"+id,{method:"DELETE"});
+      if(res.ok){
+        status("Deleted");
+        loadContacts();
+      } else {
+        status("Error deleting");
+      }
+    }
+    window.delContact = delContact;
+
+    loadContacts();
+  </script>
+
+</body>
+</html>
